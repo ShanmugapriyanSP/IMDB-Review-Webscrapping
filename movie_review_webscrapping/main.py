@@ -1,35 +1,31 @@
 from datetime import datetime
 from multiprocessing import Pool
-from pprint import pprint
 
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
 
-import config
-
-reviews = {}
+from config import config
+from data_storage import data_storage
 
 
 def get_content(url1):
     return BeautifulSoup(requests.get(url1, headers=config.HEADERS).content, 'html.parser')
 
 
-def get_all_reviews(review, title):
-    reviews[title] = reviews[title] + '||' + review.getText()
-
-
 def get_reviews(movie):
+    review = {}
     title, id = movie.split("|")
     soup = get_content(config.REVIEW_URL.replace('{id}', id))
     try:
-        review_list = soup.find_all('div', {'class': 'text show-more__control'})
-        print(review_list.size())
-        for review in review_list:
-            reviews[title] = reviews[title] + '||' + review.getText()
+        review_list = [element.get_text() for element in soup.find_all('div', {'class': 'text show-more__control'})]
+        review['movie_name'] = title
+        review['movie_review'] = review_list
+        config.logger.info('Title =====>' + title)
+        config.logger.info('Total Reviews =====>' + str(len(review_list)))
     except (AttributeError, KeyError) as e:
-        reviews[title] = reviews[title] + '||' + np.NaN
-    print(title)
+        review[title] = review[title].append(np.NaN)
+    return review
 
 
 if __name__ == '__main__':
@@ -43,9 +39,10 @@ if __name__ == '__main__':
         value = id.find('a')
         movie_ids.append(value.get_text() + '|' + (str(value)[16:25]))
 
-    pprint(movie_ids)
     pool = Pool()
-    pool.map(get_reviews, movie_ids)
-    pprint(reviews)
+    reviews = pool.map(get_reviews, movie_ids)
+
     finish = datetime.now()
     print(finish - start)
+
+    data_storage.store_data(reviews)
