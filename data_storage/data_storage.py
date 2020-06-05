@@ -6,16 +6,16 @@ client = pymongo.MongoClient(config.MONGO_DB_CLIENT)
 
 
 def get_database():
-    return client["movie_reviews"]
+    return client[config.SCHEMA_NAME]
 
 
-def get_column(name, db):
+def get_table(name, db):
     return db[name]
 
 
-def store_data(data):
+def store_data(data, table_name):
     db = get_database()
-    table = get_column('reviews', db)
+    table = get_table(table_name, db)
     x = table.insert_many(data)
 
     print(x)
