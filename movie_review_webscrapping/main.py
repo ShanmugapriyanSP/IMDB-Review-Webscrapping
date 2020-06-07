@@ -1,6 +1,4 @@
-import multiprocessing
-from datetime import datetime
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor as Pool
 
 import numpy as np
 import requests
@@ -8,7 +6,7 @@ from bs4 import BeautifulSoup
 from lxml import html
 
 from config import config
-from data_storage import data_storage
+from data_storage.data_storage import Database
 
 
 def get_soup(url):
@@ -24,7 +22,7 @@ def get_text_from_xpath(page, xpath):
     return rating
 
 
-class Review:
+class Review(Database):
 
     def __init__(self, url):
         self.url = url
@@ -42,96 +40,96 @@ class Review:
 
     def load_imdb_ids(self):
         for imdb_id in self.tags:
-            dict = {}
+            id_dict = {}
             value = imdb_id.find('a')
             self.ids.append(value.get_text() + '|' + (str(value)[16:25]))
-            dict['title'] = value.get_text()
-            dict['imdb_id'] = str(value)[16:25]
-            self.dict_list.append(dict)
+            id_dict['title'] = value.get_text()
+            id_dict['imdb_id'] = str(value)[16:25]
+            self.dict_list.append(id_dict)
 
         return self.dict_list
 
+    @staticmethod
+    def get_reviews(ids):
+        review = {}
+        try:
+            title, imdb_id = ids.split("|")
 
-def get_reviews(ids):
-    review = {}
-    try:
-        title, imdb_id = ids.split("|")
+            good_review_url = config.GOOD_REVIEW_URL.replace('{id}', imdb_id)
+            bad_review_url = config.BAD_REVIEW_URL.replace('{id}', imdb_id)
 
-        good_review_url = config.GOOD_REVIEW_URL.replace('{id}', imdb_id)
-        bad_review_url = config.BAD_REVIEW_URL.replace('{id}', imdb_id)
+            good_soup = get_soup(good_review_url)
+            good_review_list = [element.get_text() for element in
+                                good_soup.find_all('div', {'class': 'text show-more__control'})]
+            good_page = requests.get(good_review_url)
+            good_rating_list = [
+                get_text_from_xpath(good_page, f'(//span[@class="rating-other-user-rating"]//span[1])[{i}]')
+                for i in range(0, len(good_review_list))]
 
-        good_soup = get_soup(good_review_url)
-        good_review_list = [element.get_text() for element in
-                            good_soup.find_all('div', {'class': 'text show-more__control'})]
-        good_page = requests.get(good_review_url)
-        good_rating_list = [get_text_from_xpath(good_page, f'(//span[@class="rating-other-user-rating"]//span[1])[{i}]')
-                            for i in range(0, len(good_review_list))]
+            bad_soup = get_soup(bad_review_url)
+            bad_review_list = [element.get_text() for element in
+                               bad_soup.find_all('div', {'class': 'text show-more__control'})]
+            bad_page = requests.get(bad_review_url)
+            bad_rating_list = [
+                get_text_from_xpath(bad_page, f'(//span[@class="rating-other-user-rating"]//span[1])[{i}]')
+                for i in range(0, len(bad_review_list))]
 
-        bad_soup = get_soup(bad_review_url)
-        bad_review_list = [element.get_text() for element in
-                           bad_soup.find_all('div', {'class': 'text show-more__control'})]
-        bad_page = requests.get(bad_review_url)
-        bad_rating_list = [get_text_from_xpath(bad_page, f'(//span[@class="rating-other-user-rating"]//span[1])[{i}]')
-                           for i in range(0, len(bad_review_list))]
+            review['name'] = title
+            review['review'] = good_review_list
+            review['review'].extend(bad_review_list)
+            review['ratings'] = good_rating_list
+            review['ratings'].extend(bad_rating_list)
 
-        review['name'] = title
-        review['review'] = good_review_list
-        review['review'].extend(bad_review_list)
-        review['ratings'] = good_rating_list
-        review['ratings'].extend(bad_rating_list)
-        config.logger.info('Title =====>' + title)
-        config.logger.info('Good Reviews =====>' + str(len(good_review_list)))
-        config.logger.info('Bad Reviews =====>' + str(len(bad_review_list)))
-        config.logger.info('Good Rating =====>' + str(len(good_rating_list)))
-        config.logger.info('Bad Rating =====>' + str(len(bad_rating_list)))
-    except (AttributeError, KeyError) as e:
-        config.logger.error('Error has occurred in get_reviews =====>' + e)
-        review['name'] = title
-        review['review'].extend(np.NaN)
-        review['ratings'].extend(np.NaN)
-    return review
+            config.logger.info(f'Title - {title}')
+            config.logger.info(f'Good Reviews - {len(good_review_list)}')
+            config.logger.info(f'Good Reviews - {len(good_rating_list)}')
+            config.logger.info(f'Bad Reviews - {len(bad_review_list)}')
+            config.logger.info(f'Good Reviews - {len(bad_rating_list)}')
+
+        except (AttributeError, KeyError) as e:
+            config.logger.error('Error has occurred in get_reviews =====>' + e)
+            review['name'] = title
+            review['review'].extend(np.NaN)
+            review['ratings'].extend(np.NaN)
+        return review
 
 
 def fetch_reviews(review):
-    pool = Pool(processes=multiprocessing.cpu_count())
-    rs = pool.map(get_reviews, review.ids)
+    try:
+        with Pool(max_workers=config.MAX_WORKERS) as inner_pool:
+            rs = inner_pool.map(review.get_reviews, review.ids)
+    except Exception as e:
+        config.logger.error(f'Exception occurred in fetch_reviews method - {e}')
+    finally:
+        inner_pool.shutdown()
     review.reviews = rs
-    pool.close()
-    pool.join()
 
 
-def start():
-    start_time = datetime.now()
+def perform_scrapping(movie_series_dict):
+    for rated_type, url in movie_series_dict.items():
+        obj = Review(url)
 
-    movies_top = Review(config.MOVIES_TOP_URL)
-    series_top = Review(config.SERIES_TOP_URL)
-    movies_bottom = Review(config.MOVIES_BOTTOM_URL)
-    series_bottom = Review(config.SERIES_BOTTOM_URL)
+        if 'top' in rated_type:
+            obj.load_tags('top')
+        else:
+            obj.load_tags('bottom')
 
-    movies_top.load_tags('top')
-    series_top.load_tags('top')
-    movies_bottom.load_tags('bottom')
-    series_bottom.load_tags('bottom')
+        obj.load_imdb_ids()
 
-    movies_top.load_imdb_ids()
-    series_top.load_imdb_ids()
-    movies_bottom.load_imdb_ids()
-    series_bottom.load_imdb_ids()
+        fetch_reviews(obj)
 
-    fetch_reviews(movies_top)
-    fetch_reviews(series_top)
-    fetch_reviews(movies_bottom)
-    fetch_reviews(series_bottom)
+        obj.store_data('imdb_id', obj.dict_list)
+        obj.store_data('reviews', obj.reviews)
 
-    data_storage.store_data(movies_top.dict_list, 'imdb_movie_id')
-    data_storage.store_data(movies_top.reviews, 'movie_reviews')
-    data_storage.store_data(series_top.dict_list, 'imdb_series_id')
-    data_storage.store_data(series_top.reviews, 'series_reviews')
-    data_storage.store_data(movies_bottom.dict_list, 'imdb_movie_id')
-    data_storage.store_data(movies_bottom.reviews, 'movie_reviews')
-    data_storage.store_data(series_bottom.dict_list, 'imdb_series_id')
-    data_storage.store_data(series_bottom.reviews, 'series_reviews')
+        print(f'Finished scrapping and stored {rated_type}')
+        config.logger.info(f'Finished scrapping and stored {rated_type}')
 
-    finish_time = datetime.now()
 
-    print(finish_time - start_time)
+def start(movie_series_dict_list):
+    try:
+        with Pool(max_workers=config.MAX_WORKERS) as outer_pool:
+            outer_pool.map(perform_scrapping, movie_series_dict_list)
+    except Exception as e:
+        config.logger.error(f'Exception occurred in start method - {e}')
+    finally:
+        outer_pool.shutdown()

@@ -2,20 +2,18 @@ import pymongo
 
 from config import config
 
-client = pymongo.MongoClient(config.MONGO_DB_CLIENT)
 
+class Database:
 
-def get_database():
-    return client[config.SCHEMA_NAME]
+    def __int__(self):
+        pass
 
+    @staticmethod
+    def get_connection():
+        return pymongo.MongoClient(config.MONGO_DB_CLIENT)
 
-def get_table(name, db):
-    return db[name]
-
-
-def store_data(data, table_name):
-    db = get_database()
-    table = get_table(table_name, db)
-    x = table.insert_many(data)
-
-    print(x)
+    def store_data(self, table_name, data):
+        with self.get_connection() as client:
+            _db = client[config.SCHEMA_NAME]
+            table = _db[table_name]
+            table.insert_many(data)
