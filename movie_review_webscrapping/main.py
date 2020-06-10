@@ -1,3 +1,4 @@
+import traceback
 from concurrent.futures import ProcessPoolExecutor as Pool
 
 import numpy as np
@@ -51,7 +52,7 @@ class Review(Database):
 
     @staticmethod
     def get_reviews(ids):
-        review = {}
+        review = []
         try:
             title, imdb_id = ids.split("|")
 
@@ -74,11 +75,15 @@ class Review(Database):
                 get_text_from_xpath(bad_page, f'(//span[@class="rating-other-user-rating"]//span[1])[{i}]')
                 for i in range(0, len(bad_review_list))]
 
-            review['name'] = title
-            review['review'] = good_review_list
-            review['review'].extend(bad_review_list)
-            review['ratings'] = good_rating_list
-            review['ratings'].extend(bad_rating_list)
+            for i in range(len(good_rating_list)):
+                temp_dict = dict()
+                temp_dict = {'name': title, 'review': good_review_list[i], 'ratings': good_rating_list[i]}
+                review.append(temp_dict)
+
+            for i in range(len(bad_rating_list)):
+                temp_dict = dict()
+                temp_dict = {'name': title, 'review': bad_review_list[i], 'ratings': bad_rating_list[i]}
+                review.append(temp_dict)
 
             config.logger.info(f'Title - {title}')
             config.logger.info(f'Good Reviews - {len(good_review_list)}')
@@ -87,10 +92,9 @@ class Review(Database):
             config.logger.info(f'Good Reviews - {len(bad_rating_list)}')
 
         except (AttributeError, KeyError) as e:
+            config.logger.error(traceback.format_exc())
             config.logger.error('Error has occurred in get_reviews =====>' + e)
-            review['name'] = title
-            review['review'].extend(np.NaN)
-            review['ratings'].extend(np.NaN)
+
         return review
 
 
@@ -102,7 +106,7 @@ def fetch_reviews(review):
         config.logger.error(f'Exception occurred in fetch_reviews method - {e}')
     finally:
         inner_pool.shutdown()
-    review.reviews = rs
+    review.reviews = list(rs)
 
 
 def perform_scrapping(movie_series_dict):
@@ -119,16 +123,16 @@ def perform_scrapping(movie_series_dict):
         fetch_reviews(obj)
 
         obj.store_data('imdb_id', obj.dict_list)
-        obj.store_data('reviews', obj.reviews)
+        obj.store_data_with_list_of_list('reviews', obj.reviews)
 
         print(f'Finished scrapping and stored {rated_type}')
         config.logger.info(f'Finished scrapping and stored {rated_type}')
 
 
-def start(movie_series_dict_list):
+def start(movie_series_dict):
     try:
         with Pool(max_workers=config.MAX_WORKERS) as outer_pool:
-            outer_pool.map(perform_scrapping, movie_series_dict_list)
+            outer_pool.map(perform_scrapping, movie_series_dict)
     except Exception as e:
         config.logger.error(f'Exception occurred in start method - {e}')
     finally:

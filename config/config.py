@@ -16,7 +16,7 @@ SCHEMA_NAME = 'reviews'
 import os
 
 # 90% Cpu Utilization
-MAX_WORKERS = int(os.cpu_count() // 1.10)
+MAX_WORKERS = int(os.cpu_count())
 
 import logging
 
