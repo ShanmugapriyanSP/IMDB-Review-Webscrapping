@@ -1,7 +1,14 @@
+"""
+Application for web scrapping movie and series reviews(raw data) from
+IMDB website.
+
+Data to be used for Sentiment analysis, Recommendation, Genre prediction
+"""
+from concurrent.futures import ProcessPoolExecutor as Pool
 from datetime import datetime
 
-from config import config
-from movie_review_webscrapping import main
+import config
+from movie_review_webscrapping.main import perform_scrapping
 
 if __name__ == '__main__':
     START_TIME = datetime.now()
@@ -10,7 +17,13 @@ if __name__ == '__main__':
                          {'movies_bottom': config.MOVIES_BOTTOM_URL},
                          {'series_bottom': config.SERIES_BOTTOM_URL}
                          ]
-    main.start(MOVIE_SERIES_LIST)
+    try:
+        with Pool(max_workers=config.MAX_WORKERS) as executor:
+            executor.map(perform_scrapping, MOVIE_SERIES_LIST)
+    except Exception as exception:
+        config.logger.error(f'Exception occurred in perform_scrapping method - {exception}')
+    finally:
+        executor.shutdown()
 
     FINISH_TIME = datetime.now()
 
