@@ -1,3 +1,4 @@
 # Movie-Review-Webscrapping
 
+![Library](https://img.shields.io/badge/Library-Beautiful%20Soup-orange)
 This application is developed to retrieve the raw data from IMDB website for the purpose of Sentiment analysis on reviews and to build recommender system for movies and series 
