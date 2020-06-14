@@ -25,9 +25,7 @@ def wait(seconds):
 def get_soup(url):
     """
     To parse HTML
-
     :param Url to parse
-
     :return soup object for the provied url
     """
     # wait(0.5)
@@ -37,9 +35,7 @@ def get_soup(url):
 def get_text_from_xpath(page, xpath):
     """
     To get text from a xpath
-
     :param Page content and xpath to extract text
-
     :return Extracted text
     """
     tree = html.fromstring(page.content)
@@ -63,7 +59,6 @@ class Review:
     def load_tags(self, rated='top'):
         """
         Fetching movie or series names
-
         :param rated type differentiating the attributes to
         capture the movie or series titles
         """
@@ -75,7 +70,6 @@ class Review:
     def get_distinct_imdb_ids(self):
         """
         To get the imdb unique ids
-
         :return: String with pipe separating imdb id and title
         """
         ids = []
@@ -89,7 +83,6 @@ class MyDictionary(dict):
     """
     User definded Dictionary class
     """
-
     def __init__(self):
         self = dict()
 
@@ -104,7 +97,6 @@ def get_reviews(ids):
     dictionary and will return back as list of dictionary.
 
     :param title and imdb ids
-
     :return review-ratings dictionary as list
     """
     reviews = []
@@ -179,7 +171,6 @@ def fetch_reviews(ids):
     processing module
 
     :param title and imdb ids
-
     :return review-ratings dictionary as list
     """
     try:
@@ -195,7 +186,6 @@ def fetch_reviews(ids):
 def get_imdb_data_from_db():
     """
     To retreive the data from mongo db
-
     :return: list of imdb ids and title
     """
     return Database().retrieve_data('imdb_id')
