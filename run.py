@@ -37,7 +37,7 @@ if __name__ == '__main__':
     MOVIE_SERIES_LIST = prepare_dynamic_urls()
 
     # Below code is commented because multiprocessing causing too
-    # many requests to IMDB site and making it down similar to DDOS attack
+    # many requests to IMDB site.
 
     # try:
     #     with Pool(max_workers=config.MAX_WORKERS) as executor:
